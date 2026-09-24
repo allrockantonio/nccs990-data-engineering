@@ -48,7 +48,7 @@ if __name__ == "__main__":
         if parrun == "loaddata":
             print("Download and Load data catalog into raw tables")
             filecatalog.update_filecatalogs(connstr,catalog_url)
-    print("complete sss")
+    print("complete ssss")
 
     
 
