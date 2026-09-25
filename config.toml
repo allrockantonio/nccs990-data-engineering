@@ -2,5 +2,9 @@
 catalog_url = "https://urbaninstitute.github.io/nccs/catalogs/catalog-efile-v2_1.html"
 catalog_dict = "https://nonprofit-open-data-collective.github.io/irs990efile/data-dictionary/data-dictionary.html"
 [dbconn]
-XXXconnstr="DRIVER={ODBC Driver 18 for SQL Server};Server=CCS-2BKVYJ4;Database=nccs990_test;UID=sa;PWD=NCCS990Password;TrustServerCertificate=yes"
 connstr="DRIVER={ODBC Driver 18 for SQL Server};Server=DESKTOP-KR1CQDE\\SERVERA;Database=nccs990_test;UID=sa;PWD=sa;TrustServerCertificate=yes"
+[output]
+build="reload" # new - drop all tables, reload check and create for new
+raw_data="raw_files"
+[logging]
+debug = 1
