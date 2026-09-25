@@ -14,10 +14,13 @@ venv/
 .vscode/
 
 # Logs
-*.log
+*.logs
 
 # Temporary files
 *.tmp
 
 # Large/local data
-raw/
+raw_files/
+
+# Large/local data
+oldversion/
