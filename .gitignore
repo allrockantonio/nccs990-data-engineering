@@ -4,7 +4,6 @@ __pycache__/
 
 # Virtual environment
 .venv/
-.venv2/
 venv/
 
 # Environment variables / secrets
@@ -15,9 +14,8 @@ venv/
 .vscode/
 
 # Logs
-logs/
-*.log
 *.logs
+logs/
 
 # Temporary files
 *.tmp
