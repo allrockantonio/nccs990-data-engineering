@@ -5,6 +5,7 @@ catalog_dict = "https://nonprofit-open-data-collective.github.io/irs990efile/dat
 connstr="DRIVER={ODBC Driver 18 for SQL Server};Server=DESKTOP-KR1CQDE\\SERVERA;Database=nccs990_test;UID=sa;PWD=sa;TrustServerCertificate=yes"
 [output]
 build="reload" # new - drop all tables, reload check and create for new
-raw_data="raw_files"
+raw_data ="raw_files"
+raw_parq ="parquets"
 [logging]
-debug = 1
+debug = 0

@@ -10,6 +10,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+
 def getconfig(setting):
     config_path = Path(__file__).with_name("config.toml")
     with config_path.open("rb") as file:
@@ -26,9 +27,8 @@ def getconfig(setting):
             return config['logging']['debug']            
         if setting=="build":        
             return config['output']['build']       
-
-
-
+        if setting=="raw_parq":        
+            return config['output']['raw_parq']       
 
 def setup_logging(debug=False):
     log_dir = Path(__file__).resolve().parent / "logs"
@@ -54,8 +54,25 @@ def setup_logging(debug=False):
         force=True,
     )    
 
-def GetDF(connstr,sqlQry):        
+def GetDFCol(sqlQry,columnname):
     try:        
+        connstr=getconfig("connstr")
+        connection_url = URL.create("mssql+pyodbc",query={"odbc_connect": connstr})    
+        engine = create_engine(connection_url)
+        conn = engine.connect()        
+        return_df = pd.read_sql_query(sqlQry, conn)
+        retval = return_df[columnname].iloc[0]
+        logger.debug(f"debug getdf:{sqlQry}")
+        return retval
+    except Exception as e:
+        print(f"ExecQ {sqlQry} ",e)        
+        df = pd.DataFrame()        
+        logger.error("getdf")
+        logger.error(e)
+        return None
+def GetDF(sqlQry):        
+    try:        
+        connstr=getconfig("connstr")
         connection_url = URL.create("mssql+pyodbc",query={"odbc_connect": connstr})    
         engine = create_engine(connection_url)
         conn = engine.connect()        
@@ -68,9 +85,11 @@ def GetDF(connstr,sqlQry):
         logger.error("getdf")
         logger.error(e)
         return
-def ExecQ(connstr, sqlQry, params=None):
+def ExecQ(sqlQry, params=None):
+    connstr=getconfig("connstr")
     engine = None
     try:
+        logger.debug(connstr)
         connection_url = URL.create(
             "mssql+pyodbc",
             query={"odbc_connect": connstr},
