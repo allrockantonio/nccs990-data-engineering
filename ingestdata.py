@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from io import BytesIO
 import pyarrow.parquet as pq
 import sqlalchemy as sa
+from process_timer import ProcessTimer
 connstr=fnc.getconfig("connstr")
 catalog_url = fnc.getconfig("catalogurl")
 catalog_dic = fnc.getconfig("catalogdict")
@@ -52,30 +53,40 @@ def build_options(buildoption,targettable,targetfile):
                 (select replace(lower(filename),'.csv','.parquet') from [dbo].NCCS_Tables_FileRecord 
                 where tableid = (select recordid from dbo.NCCS_Tables where tablename = '{targettable}') and datayear={targetfile})
             """
-            #fnc.ExecQ(sql)
-            #sql = f"update [dbo].[NCCS_Tables_FileRecord] set rowsloaded = null where tableid=(SELECT recordid FROM [dbo].[NCCS_Tables] where tablename='{tblname}')"
-            #fnc.ExecQ(sql)
+            fnc.ExecQ(sql)
+            sql = f"update [dbo].[NCCS_Tables_FileRecord] set rowsloaded = null where tableid=(SELECT recordid FROM [dbo].[NCCS_Tables] where tablename='{tblname}')"
+            fnc.ExecQ(sql)
 
 def load_data(targettable=None,targetfile=None):            
+    timer = ProcessTimer("load_data", logger)
     sql="SELECT TableName,recordid FROM [dbo].[NCCS_Tables] where include=1 "
     if targettable!="*": sql=sql+f" and tablename='{targettable}' order by recordid"    
     df_tbl_list = fnc.GetDF(sql)
     for _, row in df_tbl_list.iterrows():
         tblname = row["TableName"]
         tblid = row["recordid"]   
+        table_timer = ProcessTimer(tblname, logger)
         create_sqltable(tblid,tblname)             
+        table_timer.step("table setup")
         parquet_path = Path(output_par) / tblname     
         filterfile = "*.parquet"        
         if targetfile != "*"  : filterfile = "*" + targetfile+".parquet"
         for file_path in  parquet_path.glob(filterfile):    
+            file_timer = ProcessTimer(f"{tblname} | {file_path.name}", logger)
             source=file_path.name.replace(".parquet",'.csv')
             sql = f"select [RowCount] - isnull([RowsLoaded],0) cnt from  [dbo].[NCCS_Tables_FileRecord] where filename = '{source}'"
             cnt = int(fnc.GetDFCol(sql,'cnt'))            
+            file_timer.step("check load status")
             if cnt!=0:                
-                source=file_path.name            
+                source=file_path.name   
+                sql=f"delete from raw.[{tblname}] where sourcefile='{source}'"         
+                fnc.ExecQ(sql)
+                file_timer.step("delete existing rows")
                 load_parquet(tblid,file_path,tblname,source)
             else:
                 logger.info(f"Skipped {tblid} | {source.replace(".csv",'.parquet')}")
+            file_timer.total()
+    timer.total()
 
 def create_sqltable(tblid,tblname):
     sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tblid} order by orderid"
@@ -100,88 +111,100 @@ def create_sqltable(tblid,tblname):
             case "boolean":
                 structure=structure + ',['+ newcol + "] [bit] null "                    
                 
-
     sql = f"""IF OBJECT_ID('raw.[{tblname}]', 'U') IS NULL begin CREATE TABLE [raw].[{tblname}]({structure}) end"""    
     fnc.ExecQ(sql)
     sql = f"""IF NOT EXISTS(SELECT * FROM sys.indexes WHERE name = 'NCI-SourceFile' AND object_id = OBJECT_ID('raw.{tblname}'))
     CREATE NONCLUSTERED INDEX [NCI-SourceFile] ON [raw].[{tblname}]([sourcefile] )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
     """    
     fnc.ExecQ(sql)
-    #sql = f"delete from [raw].[{tblname}] where sourcefile='{source}'"
-    #fnc.ExecQ(sql)
 
-def load_parquet(tableid,file,tblname,source):
-    logger.info(f"Loading {tableid} | {source}")
 
-    tblschema=get_table_schema(tableid)
-    df_parquet = pd.read_parquet(file,schema=tblschema)
-
-    column_map={}    
-    url=False    
-
+def load_parquet(tableid,file,tblname,source):    
+    timer = ProcessTimer(f"{tblname} | {source} | load_parquet", logger)
+    
+    timer.step("get columns")    
     sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tableid} order by orderid"
     df_columns = fnc.GetDF(sql)
-    for _, row in df_columns.iterrows():
-        newcol = row["newcolname"]
-        orgcol = row["orgcolname"]             
-        coltype =row["coltype"]             
-        for pcolumn in df_parquet.columns: # create column map
-            if pcolumn.lower()==orgcol.lower():
-                column_map[pcolumn]=newcol                
-            if pcolumn.lower()=="url":url=True    
-    
-    for pcolumn in df_parquet.columns: 
-        found=False        
-        for _, row in df_columns.iterrows():            
-            if row["orgcolname"].lower()==pcolumn.lower():
-                found=True        
-        if found==False:
-            if pcolumn.lower()!="url":
-                df_parquet = df_parquet.drop(columns=[pcolumn], errors="ignore")
 
-    
-    if (url==True):column_map["URL"]="URL"    
-    
-    for column in get_table_column_dates(tableid):                
-        if column not in df_parquet.columns:continue
-        df_parquet[column] = pd.to_datetime(df_parquet[column],errors="coerce")
+    timer.step("fetch column metadata")
 
-    for column in get_table_column_string(tableid):                
-        if column not in df_parquet.columns:continue        
-        df_parquet[column] = df_parquet[column].astype("string")        
-        df_parquet[column] = df_parquet[column].str.replace(r"^([0-9]+)\.0+$", r"\1", regex=True)
-    
+    metadata = {
+        row.orgcolname.lower(): (row.newcolname, row.coltype.lower())
+        for row in df_columns.itertuples(index=False)
+    }
+    available_columns = pq.ParquetFile(file).schema_arrow.names
+    selected_columns = [
+        name for name in available_columns
+        if name.lower() in metadata or name.lower() == "url"
+    ]
+    timer.step("select parquet columns")
+    df_parquet = pd.read_parquet(file, columns=selected_columns)
+    timer.step("read parquet")
+    column_map = {}
+    for column in df_parquet.columns:
+        definition = metadata.get(column.lower())
+        if definition is None:
+            column_map[column] = "url"
+            continue
+
+        new_name, column_type = definition
+        column_map[column] = new_name
+
+        if column_type == "datetime64":
+            df_parquet[column] = pd.to_datetime(
+                df_parquet[column], errors="coerce"
+            )
+        elif column_type == "string":
+            values = df_parquet[column].astype("string")
+            if "phone" in column.lower():
+                values = values.str.replace(
+                    r"^([0-9]+)\.0+$", r"\1", regex=True
+                )
+            df_parquet[column] = values
+
     df_parquet = df_parquet.rename(columns=column_map)
-
     df_parquet.insert(0, "SourceFile", source)
-    engine = sa.create_engine(f"mssql+pyodbc:///?odbc_connect={connstr}")            
-    df_parquet.to_sql(
-        name=tblname,         # Name of the SQL table
-        schema="raw",
-        con=engine,               # SQLAlchemy engine connection
-        if_exists="append",       # What to do if table exists: 'fail', 'replace', or 'append'
-        index=False,               # Set to True if you want to keep the DataFrame index
-        chunksize=1000,
-    )
+    timer.step("convert and rename columns")
+
+    insertdata(df_parquet,tblname)
+    timer.step("insert into SQL Server")
 
     sql = f"""
-            UPDATE t SET rowsloaded = a.cnt FROM dbo.NCCS_Tables_FileRecord AS t INNER JOIN
-            (SELECT COUNT(*) AS cnt,replace(sourcefile,'.parquet','.csv') sourcefile FROM raw.[{tblname}] group by sourcefile
-            ) AS a ON a.sourcefile = t.filename WHERE t.tableid = {tableid};"""
-    fnc.ExecQ(sql)
+        update dbo.NCCS_Tables_FileRecord set lastupdate = getdate() ,
+        rowsloaded = (select count(1) from raw.[{tblname}] where sourcefile='{source}')
+        where tableid = {tableid} and replace(filename,'.csv','.parquet')='{source}' """
+    fnc.ExecQ(sql)        
+    timer.step("update row count and load status")
+    timer.total()
 
-    sql = f"update dbo.NCCS_Tables_FileRecord set lastupdate = getdate() where replace(filename,'.csv','.parquet') = '{source}'"
-    fnc.ExecQ(sql)
+def insertdata(df,tblname):
+    engine = sa.create_engine(
+    sa.engine.URL.create(
+        "mssql+pyodbc",
+        query={"odbc_connect": connstr},
+    ),
+    fast_executemany=True,)
+
+    try:
+        with engine.begin() as connection:
+            df.to_sql(
+                name=tblname,
+                schema="raw",
+                con=connection,
+                if_exists="append",
+                index=False,
+                chunksize=5000,
+            )
+    finally:
+        engine.dispose()
 
 
-
-
-def get_table_schema(fileid):
-    sql = f"select orgcolname,coltype from NCCS_Tables_Columns where tableid = {fileid} and coltype != 'datetime64' order by orderid asc"
-    dfcol = fnc.GetDF(sql)
-    schema={}
-    for index, row in dfcol.iterrows():        
-        schema[row['orgcolname']] = row['coltype']
+# def get_table_schema(fileid):
+#     sql = f"select orgcolname,coltype from NCCS_Tables_Columns where tableid = {fileid} and coltype != 'datetime64' order by orderid asc"
+#     dfcol = fnc.GetDF(sql)
+#     schema={}
+#     for index, row in dfcol.iterrows():        
+#         schema[row['orgcolname']] = row['coltype']
 
 def check_dictionary(targettable="",targetfile=""):
     retval=True

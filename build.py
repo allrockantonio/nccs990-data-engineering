@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from bs4 import BeautifulSoup
 from io import BytesIO
-
+from process_timer import ProcessTimer
 import pandas as pd
 connstr=fnc.getconfig("connstr")
 catalog_url = fnc.getconfig("catalogurl")
@@ -32,23 +32,19 @@ def run(builddb=None,dictionary=None,download=None):
     if download=="yes":
         download_csv()    
 #    
-def download_csv():
-    df_tbl_list = fnc.GetDF(
-        "SELECT TableName,recordid FROM dbo.NCCS_Tables "
-        "WHERE include=1 ORDER BY recordid"
-    )
-
+def download_csv():        
+    sql = "SELECT TableName,recordid FROM dbo.NCCS_Tables WHERE include=1 ORDER BY recordid"
+    df_tbl_list = fnc.GetDF(sql)    
     for _, row in df_tbl_list.iterrows():
         tblname = row["TableName"]
-
         try:
+            timer = ProcessTimer(f"{tblname} download", logger)
             tblid = row["recordid"]
 
             download_path = Path(output_raw) / tblname / "csv"
             parquet_path = Path(output_par) / tblname
             download_path.mkdir(parents=True, exist_ok=True)
-            parquet_path.mkdir(parents=True, exist_ok=True)
-
+            parquet_path.mkdir(parents=True, exist_ok=True)            
             df_files = fnc.GetDF(
                 f"SELECT url FROM dbo.NCCS_Tables_FileRecord "
                 f"WHERE tableid={tblid} ORDER BY datayear"
@@ -69,8 +65,8 @@ def download_csv():
                     if not file_path.exists():
                         response = requests.get(fileurl, timeout=160)
                         response.raise_for_status()
-                        file_path.write_bytes(response.content)
-                        logger.info("Downloaded %s", filename)
+                        file_path.write_bytes(response.content)                        
+                        timer.step(f"downloaded {filename}")
 
                     df_data = pd.read_csv(file_path, low_memory=False)
 
@@ -79,7 +75,7 @@ def download_csv():
                     df_data.to_parquet(temp_path, engine="pyarrow", index=False)
                     temp_path.replace(pfile_path)
                     file_path.unlink(missing_ok=True)
-                    logger.info("Created %s", pfile_path)
+                    timer.step(f"converted to {filename}")
 
                 except Exception:
                     logger.exception("Failed file %s in table %s; continuing",frow.get("url", "<unknown>"),tblname,)
@@ -88,9 +84,7 @@ def download_csv():
         except Exception:
             logger.exception("Failed table %s; continuing to next table", tblname)
             continue
-    
-
-
+    timer.total()
 def create_data_dictionary():
     df_tbl_list=fnc.GetDF("SELECT TableName,recordid FROM [dbo].[NCCS_Tables]  where include=1 order by recordid asc")
     for index, row in df_tbl_list.iterrows():

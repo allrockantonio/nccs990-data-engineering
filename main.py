@@ -3,6 +3,7 @@ import logging
 import sys
 import build 
 import ingestdata as idata
+import dimension as dim
 from pathlib import Path
 import argparse
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ def main():
         parser.add_argument(
             "--command",
             required=True,
-            choices=["build", "loaddata","dictionary"],
+            choices=["build", "loaddata","dimension"],
         )        
         parser.add_argument("--cleanupdb",dest="tbuild_cleandb",choices=["yes", "no"],default="no",)
         parser.add_argument("--dictionary",dest="tdictionary",choices=["yes", "no"],default="no",)
@@ -40,7 +41,7 @@ def main():
             if args.tbuildoption != None:buildoption = args.tbuildoption     
 
         logger.info(f"NCCS Started with {args.command} table {target_tablename}")
-
+        if args.command.lower() == "dimension":dim.run();
         if args.command.lower() == "build":build.run(build_cleandb,dictionary,download)        
         if args.command.lower() == "loaddata":idata.run(target_tablename,target_file,dictionary,buildoption)        
         logger.info("NCCS Completed")
