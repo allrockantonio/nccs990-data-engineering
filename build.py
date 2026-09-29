@@ -13,7 +13,7 @@ connstr=fnc.getconfig("connstr")
 catalog_url = fnc.getconfig("catalogurl")
 catalog_dic = fnc.getconfig("catalogdict")
 output_raw =fnc.getconfig("raw_data")
-
+output_par =fnc.getconfig("raw_parq")
 logger = logging.getLogger(__name__)
 
 def run(builddb=None,dictionary=None,download=None):    

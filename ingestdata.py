@@ -42,7 +42,9 @@ def build_options(buildoption,targettable,targetfile):
         tblname = row["TableName"]
         tblid = row["recordid"]        
         if (buildoption=="droptable"):
-            sql = f"drop table [raw].[{tblname}]"
+            sql = f"""IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[raw].[{tblname}]') AND type in (N'U')) begin drop table [raw].[{tblname}] end """
+            fnc.ExecQ(sql)
+            sql = f"update [dbo].[NCCS_Tables_FileRecord] set rowsloaded = null where tableid=(SELECT recordid FROM [dbo].[NCCS_Tables] where tablename='{tblname}')"
             fnc.ExecQ(sql)
         if (buildoption=="overwrite"):
             sql = f"""
@@ -50,33 +52,36 @@ def build_options(buildoption,targettable,targetfile):
                 (select replace(lower(filename),'.csv','.parquet') from [dbo].NCCS_Tables_FileRecord 
                 where tableid = (select recordid from dbo.NCCS_Tables where tablename = '{targettable}') and datayear={targetfile})
             """
-            fnc.ExecQ(sql)
+            #fnc.ExecQ(sql)
+            #sql = f"update [dbo].[NCCS_Tables_FileRecord] set rowsloaded = null where tableid=(SELECT recordid FROM [dbo].[NCCS_Tables] where tablename='{tblname}')"
+            #fnc.ExecQ(sql)
 
-def load_data(targettable=None,targetfile=None):        
-    
+def load_data(targettable=None,targetfile=None):            
     sql="SELECT TableName,recordid FROM [dbo].[NCCS_Tables] where include=1 "
-    if targettable!="*": sql=sql+f" and tablename='{targettable}' order by recordid"
+    if targettable!="*": sql=sql+f" and tablename='{targettable}' order by recordid"    
     df_tbl_list = fnc.GetDF(sql)
     for _, row in df_tbl_list.iterrows():
         tblname = row["TableName"]
-        tblid = row["recordid"]        
+        tblid = row["recordid"]   
+        create_sqltable(tblid,tblname)             
         parquet_path = Path(output_par) / tblname     
         filterfile = "*.parquet"        
         if targetfile != "*"  : filterfile = "*" + targetfile+".parquet"
-        for file_path in  parquet_path.glob(filterfile):            
-            source=file_path.name            
-            load_parquet(tblid,file_path,tblname,source)
+        for file_path in  parquet_path.glob(filterfile):    
+            source=file_path.name.replace(".parquet",'.csv')
+            sql = f"select [RowCount] - isnull([RowsLoaded],0) cnt from  [dbo].[NCCS_Tables_FileRecord] where filename = '{source}'"
+            cnt = int(fnc.GetDFCol(sql,'cnt'))            
+            if cnt!=0:                
+                source=file_path.name            
+                load_parquet(tblid,file_path,tblname,source)
+            else:
+                logger.info(f"Skipped {tblid} | {source.replace(".csv",'.parquet')}")
 
-def load_parquet(tableid,file,tblname,source):
-    sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tableid} order by orderid"
+def create_sqltable(tblid,tblname):
+    sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tblid} order by orderid"
     df_columns = fnc.GetDF(sql)
-    tblschema=get_table_schema(tableid)
-    df_parquet = pd.read_parquet(file,schema=tblschema)
-    column_map={}
-    url=False
-    structure=""
-    
-    structure=structure + "[sourcefile] [nvarchar](max) null " 
+    structure=""    
+    structure=structure + "[sourcefile] [nvarchar](500) null " 
     structure=structure + ",[url] [nvarchar](max) null " 
 
     for _, row in df_columns.iterrows():
@@ -94,30 +99,57 @@ def load_parquet(tableid,file,tblname,source):
                 structure=structure + ',['+ newcol + "] [datetime] null "                                                 
             case "boolean":
                 structure=structure + ',['+ newcol + "] [bit] null "                    
-        
+                
+
+    sql = f"""IF OBJECT_ID('raw.[{tblname}]', 'U') IS NULL begin CREATE TABLE [raw].[{tblname}]({structure}) end"""    
+    fnc.ExecQ(sql)
+    sql = f"""IF NOT EXISTS(SELECT * FROM sys.indexes WHERE name = 'NCI-SourceFile' AND object_id = OBJECT_ID('raw.{tblname}'))
+    CREATE NONCLUSTERED INDEX [NCI-SourceFile] ON [raw].[{tblname}]([sourcefile] )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+    """    
+    fnc.ExecQ(sql)
+    #sql = f"delete from [raw].[{tblname}] where sourcefile='{source}'"
+    #fnc.ExecQ(sql)
+
+def load_parquet(tableid,file,tblname,source):
+    logger.info(f"Loading {tableid} | {source}")
+
+    tblschema=get_table_schema(tableid)
+    df_parquet = pd.read_parquet(file,schema=tblschema)
+
+    column_map={}    
+    url=False    
+
+    sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tableid} order by orderid"
+    df_columns = fnc.GetDF(sql)
+    for _, row in df_columns.iterrows():
+        newcol = row["newcolname"]
+        orgcol = row["orgcolname"]             
+        coltype =row["coltype"]             
         for pcolumn in df_parquet.columns: # create column map
-            if pcolumn.lower()==orgcol.lower():column_map[pcolumn]=newcol
-            if pcolumn.lower()=="url":url=True
-
-    sql = f"""IF OBJECT_ID('raw.[{tblname}]', 'U') IS NULL begin CREATE TABLE [raw].[{tblname}]({structure}) end"""
-    fnc.ExecQ(sql)
-
-    sql = f"delete from [raw].[{tblname}] where sourcefile='{source}'"
-    fnc.ExecQ(sql)
+            if pcolumn.lower()==orgcol.lower():
+                column_map[pcolumn]=newcol                
+            if pcolumn.lower()=="url":url=True    
     
     for pcolumn in df_parquet.columns: 
-        found=False
+        found=False        
         for _, row in df_columns.iterrows():            
             if row["orgcolname"].lower()==pcolumn.lower():
-                found=True
+                found=True        
         if found==False:
             if pcolumn.lower()!="url":
                 df_parquet = df_parquet.drop(columns=[pcolumn], errors="ignore")
+
+    
     if (url==True):column_map["URL"]="URL"    
     
     for column in get_table_column_dates(tableid):                
         if column not in df_parquet.columns:continue
         df_parquet[column] = pd.to_datetime(df_parquet[column],errors="coerce")
+
+    for column in get_table_column_string(tableid):                
+        if column not in df_parquet.columns:continue        
+        df_parquet[column] = df_parquet[column].astype("string")        
+        df_parquet[column] = df_parquet[column].str.replace(r"^([0-9]+)\.0+$", r"\1", regex=True)
     
     df_parquet = df_parquet.rename(columns=column_map)
 
@@ -133,9 +165,16 @@ def load_parquet(tableid,file,tblname,source):
     )
 
     sql = f"""
-        UPDATE t SET rowsloaded = a.cnt FROM dbo.NCCS_Tables_FileRecord AS t INNER JOIN
-        (SELECT TAX_YEAR, COUNT(*) AS cnt FROM raw.[{tblname}]    GROUP BY TAX_YEAR) AS a ON a.TAX_YEAR = t.datayear WHERE t.tableid = {tableid};"""
+            UPDATE t SET rowsloaded = a.cnt FROM dbo.NCCS_Tables_FileRecord AS t INNER JOIN
+            (SELECT COUNT(*) AS cnt,replace(sourcefile,'.parquet','.csv') sourcefile FROM raw.[{tblname}] group by sourcefile
+            ) AS a ON a.sourcefile = t.filename WHERE t.tableid = {tableid};"""
     fnc.ExecQ(sql)
+
+    sql = f"update dbo.NCCS_Tables_FileRecord set lastupdate = getdate() where replace(filename,'.csv','.parquet') = '{source}'"
+    fnc.ExecQ(sql)
+
+
+
 
 def get_table_schema(fileid):
     sql = f"select orgcolname,coltype from NCCS_Tables_Columns where tableid = {fileid} and coltype != 'datetime64' order by orderid asc"
@@ -189,6 +228,13 @@ def get_table_column_dates(fileid):
     datelist=[]
     for index, row in dfcol.iterrows():datelist.append( row['orgcolname'])
     return datelist
+
+def get_table_column_string(fileid):
+    sql = f"select orgcolname from NCCS_Tables_Columns where tableid = {fileid} and coltype like '%string%' order by orderid asc"
+    dfcol = fnc.GetDF(sql)
+    stringlist=[]
+    for index, row in dfcol.iterrows():stringlist.append( row['orgcolname'])
+    return stringlist
         
 def update_dictionary(targettable="",targetfile=""):     
     sql="SELECT TableName,recordid FROM [dbo].[NCCS_Tables] where include=1 "
@@ -224,21 +270,25 @@ def update_column_dictionary(tblid,df,filename):
             orgcolname=rowc['orgcolname']
             newcolname=rowc['newcolname']
             coltype=rowc['coltype']
-            if coltype==None:
-                logger.info(f"{tblid} | {filename} | {newcolname} | {row.dtype}")
-                sql = f"update dbo.NCCS_Tables_Columns set coltype = '{row.dtype}' where tableid={tblid}  and orgcolname ='{row.colname}'"
-                fnc.ExecQ(sql)
+            #if coltype==None:
+            logger.info(f"{tblid} | {filename} | {newcolname} | {row.dtype}")
+            sql = f"update dbo.NCCS_Tables_Columns set coltype = '{row.dtype}' where tableid={tblid}  and orgcolname ='{row.colname}'"
+            fnc.ExecQ(sql)
             
-
 
 def infer_df(df):
     return pd.DataFrame({"colname": df.columns,"dtype": [profile_column(df[col])for col in df.columns]})
+
 def profile_column(column):    
-        # Remove null/empty values
+    if column.name.lower().endswith("_x"): # default value base in csv - not boolean - mixed value 0,x
+        return "string"
+    
     values = column.dropna()
     values = values[values.astype(str).str.strip() != ""]
     if len(values) == 0:
         return "string"
+    if pd.api.types.is_datetime64_any_dtype(column.dtype):
+        return "datetime64"
     # Convert everything to string for testing
     values = values.astype(str).str.strip()
     # Boolean
@@ -246,15 +296,24 @@ def profile_column(column):
         ["true", "false", "yes", "no", "y", "n", "0", "1"]
     ).all():
         return "boolean"
-    # Integer
-    if values.str.match(r"^[+-]?\d+$").all():
-        return "Int64"
-    # Decimal / Float
-    if values.str.match(r"^[+-]?\d*\.\d+$").all():
+    # Preserve codes such as ZIP codes and identifiers with leading zeros.
+    if values.str.match(r"^[+-]?0\d+$").any():
+        return "string"
+    # Check integer bounds without converting through floating point.
+    if values.str.fullmatch(r"[+-]?[0-9]+").all():
+        if all(-(2**63) <= int(value) < 2**63 for value in values):
+            return "Int64"
+        return "string"
+    # Accept integers mixed with decimals, trailing dots, and exponents.
+    if values.str.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?").all():
+        numeric = pd.to_numeric(values, errors="coerce")
+        if numeric.isna().any() or numeric.isin([float("inf"), float("-inf")]).any():
+            return "string"
         return "float"
     # Date
-    date_values = pd.to_datetime(values, format='%Y-%m-%d', errors="coerce")
-    if date_values.notna().all():
-        return "datetime64"
+    if values.str.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}").all():
+        date_values = pd.to_datetime(values, format='%Y-%m-%d', errors="coerce")
+        if date_values.notna().all():
+            return "datetime64"
     # Default
     return "string"

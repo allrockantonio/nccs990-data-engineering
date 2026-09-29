@@ -56,5 +56,5 @@ def main():
         logging.shutdown()  # Flush and close log handlers.    
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
 
