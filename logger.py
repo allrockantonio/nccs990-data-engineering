@@ -7,7 +7,8 @@ def setup_logging(debug=False):
     log_dir.mkdir(exist_ok=True)
 
     formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+        "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y%m%d %H:%M:%S",
     )
 
     file_handler = logging.FileHandler(

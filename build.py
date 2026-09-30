@@ -38,7 +38,7 @@ def download_csv():
     for _, row in df_tbl_list.iterrows():
         tblname = row["TableName"]
         try:
-            timer = ProcessTimer(f"{tblname} download", logger)
+            timer = ProcessTimer(f"{tblname}", logger)
             tblid = row["recordid"]
 
             download_path = Path(output_raw) / tblname / "csv"
@@ -60,13 +60,14 @@ def download_csv():
                     pfile_path = parquet_path / parquet_name
 
                     if pfile_path.exists():
+                        logger.info(f"skipped | {filename}")
                         continue
 
                     if not file_path.exists():
                         response = requests.get(fileurl, timeout=160)
                         response.raise_for_status()
                         file_path.write_bytes(response.content)                        
-                        timer.step(f"downloaded {filename}")
+                        timer.step(f"csv {filename}")
 
                     df_data = pd.read_csv(file_path, low_memory=False)
 
@@ -75,7 +76,7 @@ def download_csv():
                     df_data.to_parquet(temp_path, engine="pyarrow", index=False)
                     temp_path.replace(pfile_path)
                     file_path.unlink(missing_ok=True)
-                    timer.step(f"converted to {filename}")
+                    timer.step(f"parquet {filename.replace('.csv','.parquet')}")
 
                 except Exception:
                     logger.exception("Failed file %s in table %s; continuing",frow.get("url", "<unknown>"),tblname,)

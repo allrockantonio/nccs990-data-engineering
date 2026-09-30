@@ -8,10 +8,10 @@ class ProcessTimer:
 
     def step(self, label):        
         now = perf_counter()
-        self.logger.info("Timing | %s | %s | %.3f seconds",
+        self.logger.info("%s | %s | %.3f seconds",
                          self.name, label, now - self.previous)
         self.previous = now
 
     def total(self):        
-        self.logger.info("Timing | %s | total | %.3f seconds",
+        self.logger.info("%s | total | %.3f seconds",
                          self.name, perf_counter() - self.started)

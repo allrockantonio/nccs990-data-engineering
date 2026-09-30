@@ -86,7 +86,7 @@ def load_data(targettable=None,targetfile=None):
             else:
                 logger.info(f"Skipped {tblid} | {source.replace(".csv",'.parquet')}")
             file_timer.total()
-    timer.total()
+
 
 def create_sqltable(tblid,tblname):
     sql = f"select orgcolname,newcolname, coltype from dbo.nccs_tables_columns where tableid = {tblid} order by orderid"
@@ -103,7 +103,7 @@ def create_sqltable(tblid,tblname):
             case "string":                
                 structure=structure + ',['+ newcol + "] [nvarchar](max) null " 
             case "int64":                
-                structure=structure + ',['+ newcol + "] [int] null "                 
+                structure=structure + ',['+ newcol + "] [bigint] null "                 
             case "float":
                 structure=structure + ',['+ newcol + "] [float] null "                                 
             case "datetime64":
@@ -151,9 +151,10 @@ def load_parquet(tableid,file,tblname,source):
         column_map[column] = new_name
 
         if column_type == "datetime64":
+            # SQL Server datetime starts at 1753-01-01; preserve NaT as NULL.
             df_parquet[column] = pd.to_datetime(
                 df_parquet[column], errors="coerce"
-            )
+            ).clip(lower=pd.Timestamp("1753-01-01"))
         elif column_type == "string":
             values = df_parquet[column].astype("string")
             if "phone" in column.lower():

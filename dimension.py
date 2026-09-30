@@ -3,10 +3,15 @@ import logging
 from datetime import date
 from pathlib import Path
 import pandas as pd
+from process_timer import ProcessTimer
 logger = logging.getLogger(__name__)
 def run():
+    timer = ProcessTimer(f"Dimensions", logger)
     create_dim_date()
+    timer.step("DIM_Dates")
     create_dim_state()
+    timer.step("DIM_States")
+    timer.total()
 
 def create_dim_state():
     """Load the state lookup used by dim_tables.sql; retain existing codes."""
@@ -47,8 +52,7 @@ def create_dim_state():
     for row in df.itertuples(index=False):
         params = {"state_code": row.state_code, "state_name": row.state_name}
         if not fnc.ExecQ(sql, params):
-            raise RuntimeError(f"Failed to load state code {row.state_code}")
-    logger.info("Base state codes loaded")
+            raise RuntimeError(f"Failed to load state code {row.state_code}")    
     return True
 
 def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):    
@@ -193,4 +197,5 @@ def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):
         raise RuntimeError("Failed to create/populate dbo.Dim_Date")
 
     logger.info("Dim_Date populated from %s to %s", start, end)
+    
     return True
