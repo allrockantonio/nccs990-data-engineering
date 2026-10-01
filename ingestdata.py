@@ -203,6 +203,7 @@ def check_dictionary(targettable="",targetfile=""):
     retval=True
     ## identified columns -- for review incase data is incorrect format
     sql = """
+    update [dbo].[NCCS_Tables_Columns] set coltype = 'string' where orgcolname = 'RETURN_TYPE' or orgcolname like '%[_]RETURN_TYPE';
     update [dbo].[NCCS_Tables_Columns] set coltype = 'float'  where orgcolname like '%_TOT_AMT_%' and coltype is null;
     update [dbo].[NCCS_Tables_Columns] set coltype = 'float'  where orgcolname = 'F9_07_COMP_DTK_COMP_ORG_SUBTOT' and coltype is null;
     update [dbo].[NCCS_Tables_Columns] set coltype = 'float'  where orgcolname = 'F9_07_COMP_DTK_COMP_RLTD_SUBTOT' and coltype is null;
@@ -296,6 +297,9 @@ def infer_df(df):
     return pd.DataFrame({"colname": df.columns,"dtype": [profile_column(df[col])for col in df.columns]})
 
 def profile_column(column):    
+    # Form identifiers can mix numeric-looking codes (990) with text (990EZ).
+    if column.name.lower() == "return_type" or column.name.lower().endswith("_return_type"):
+        return "string"
     if column.name.lower().endswith("_x"): # default value base in csv - not boolean - mixed value 0,x
         return "string"
     
