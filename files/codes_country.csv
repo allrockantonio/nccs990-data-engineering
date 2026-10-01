@@ -1,0 +1,196 @@
+﻿"alpha2","alpha3","country","callcode"
+CA,CAN,Canada,+1
+EG,EGY,Egypt,+20
+ZA,ZAF,South Africa,+27
+GR,GRC,Greece,+30
+NL,NLD,Netherlands,+31
+BE,BEL,Belgium,+32
+FR,FRA,France,+33
+ES,ESP,Spain,+34
+HU,HUN,Hungary,+36
+IT,ITA,Italy,+39
+RO,ROU,Romania,+40
+CH,CHE,Switzerland,+41
+AT,AUT,Austria,+43
+GB,GBR,United Kingdom,+44
+DK,DNK,Denmark,+45
+SE,SWE,Sweden,+46
+NO,NOR,Norway,+47
+PL,POL,Poland,+48
+DE,DEU,Germany,+49
+PE,PER,Peru,+51
+MX,MEX,Mexico,+52
+CU,CUB,Cuba,+53
+AR,ARG,Argentina,+54
+BR,BRA,Brazil,+55
+CL,CHL,Chile,+56
+CO,COL,Colombia,+57
+VE,VEN,Venezuela,+58
+MY,MYS,Malaysia,+60
+AU,AUS,Australia,+61
+ID,IDN,Indonesia,+62
+PH,PHL,Philippines,+63
+NZ,NZL,New Zealand,+64
+SG,SGP,Singapore,+65
+TH,THA,Thailand,+66
+RU,RUS,Russia,+73
+KZ,KAZ,Kazakhstan,+76
+JP,JPN,Japan,+81
+KR,KOR,South Korea,+82
+VN,VNM,Vietnam,+84
+CN,CHN,China,+86
+TR,TUR,Turkey,+90
+IN,IND,India,+91
+PK,PAK,Pakistan,+92
+AF,AFG,Afghanistan,+93
+LK,LKA,Sri Lanka,+94
+MM,MMR,Myanmar,+95
+IR,IRN,Iran,+98
+SS,SSD,South Sudan,+211
+MA,MAR,Morocco,+212
+DZ,DZA,Algeria,+213
+TN,TUN,Tunisia,+216
+LY,LBY,Libya,+218
+GM,GMB,Gambia,+220
+SN,SEN,Senegal,+221
+MR,MRT,Mauritania,+222
+ML,MLI,Mali,+223
+GN,GIN,Guinea,+224
+CI,CIV,Ivory Coast,+225
+BF,BFA,Burkina Faso,+226
+NE,NER,Niger,+227
+TG,TGO,Togo,+228
+BJ,BEN,Benin,+229
+MU,MUS,Mauritius,+230
+LR,LBR,Liberia,+231
+SL,SLE,Sierra Leone,+232
+GH,GHA,Ghana,+233
+NG,NGA,Nigeria,+234
+TD,TCD,Chad,+235
+CF,CAF,Central African Republic,+236
+CM,CMR,Cameroon,+237
+CV,CPV,Cape Verde,+238
+ST,STP,São Tomé and Príncipe,+239
+GQ,GNQ,Equatorial Guinea,+240
+GA,GAB,Gabon,+241
+CG,COG,Republic of the Congo,+242
+CD,COD,DR Congo,+243
+AO,AGO,Angola,+244
+GW,GNB,Guinea-Bissau,+245
+SC,SYC,Seychelles,+248
+SD,SDN,Sudan,+249
+RW,RWA,Rwanda,+250
+ET,ETH,Ethiopia,+251
+SO,SOM,Somalia,+252
+DJ,DJI,Djibouti,+253
+KE,KEN,Kenya,+254
+TZ,TZA,Tanzania,+255
+UG,UGA,Uganda,+256
+BI,BDI,Burundi,+257
+MZ,MOZ,Mozambique,+258
+ZM,ZMB,Zambia,+260
+MG,MDG,Madagascar,+261
+ZW,ZWE,Zimbabwe,+263
+NA,NAM,Namibia,+264
+MW,MWI,Malawi,+265
+LS,LSO,Lesotho,+266
+BW,BWA,Botswana,+267
+SZ,SWZ,Eswatini,+268
+KM,COM,Comoros,+269
+ER,ERI,Eritrea,+291
+PT,PRT,Portugal,+351
+LU,LUX,Luxembourg,+352
+IE,IRL,Ireland,+353
+IS,ISL,Iceland,+354
+AL,ALB,Albania,+355
+MT,MLT,Malta,+356
+CY,CYP,Cyprus,+357
+FI,FIN,Finland,+358
+BG,BGR,Bulgaria,+359
+LT,LTU,Lithuania,+370
+LV,LVA,Latvia,+371
+EE,EST,Estonia,+372
+MD,MDA,Moldova,+373
+AM,ARM,Armenia,+374
+BY,BLR,Belarus,+375
+AD,AND,Andorra,+376
+MC,MCO,Monaco,+377
+SM,SMR,San Marino,+378
+UA,UKR,Ukraine,+380
+RS,SRB,Serbia,+381
+ME,MNE,Montenegro,+382
+XK,UNK,Kosovo,+383
+HR,HRV,Croatia,+385
+SI,SVN,Slovenia,+386
+BA,BIH,Bosnia and Herzegovina,+387
+MK,MKD,North Macedonia,+389
+CZ,CZE,Czechia,+420
+SK,SVK,Slovakia,+421
+LI,LIE,Liechtenstein,+423
+BZ,BLZ,Belize,+501
+GT,GTM,Guatemala,+502
+SV,SLV,El Salvador,+503
+HN,HND,Honduras,+504
+NI,NIC,Nicaragua,+505
+CR,CRI,Costa Rica,+506
+PA,PAN,Panama,+507
+HT,HTI,Haiti,+509
+BO,BOL,Bolivia,+591
+GY,GUY,Guyana,+592
+EC,ECU,Ecuador,+593
+PY,PRY,Paraguay,+595
+SR,SUR,Suriname,+597
+UY,URY,Uruguay,+598
+TL,TLS,Timor-Leste,+670
+BN,BRN,Brunei,+673
+NR,NRU,Nauru,+674
+PG,PNG,Papua New Guinea,+675
+TO,TON,Tonga,+676
+SB,SLB,Solomon Islands,+677
+VU,VUT,Vanuatu,+678
+FJ,FJI,Fiji,+679
+PW,PLW,Palau,+680
+WS,WSM,Samoa,+685
+KI,KIR,Kiribati,+686
+TV,TUV,Tuvalu,+688
+FM,FSM,Micronesia,+691
+MH,MHL,Marshall Islands,+692
+KP,PRK,North Korea,+850
+KH,KHM,Cambodia,+855
+LA,LAO,Laos,+856
+BD,BGD,Bangladesh,+880
+MV,MDV,Maldives,+960
+LB,LBN,Lebanon,+961
+JO,JOR,Jordan,+962
+SY,SYR,Syria,+963
+IQ,IRQ,Iraq,+964
+KW,KWT,Kuwait,+965
+SA,SAU,Saudi Arabia,+966
+YE,YEM,Yemen,+967
+OM,OMN,Oman,+968
+AE,ARE,United Arab Emirates,+971
+IL,ISR,Israel,+972
+BH,BHR,Bahrain,+973
+QA,QAT,Qatar,+974
+BT,BTN,Bhutan,+975
+MN,MNG,Mongolia,+976
+NP,NPL,Nepal,+977
+TJ,TJK,Tajikistan,+992
+TM,TKM,Turkmenistan,+993
+AZ,AZE,Azerbaijan,+994
+GE,GEO,Georgia,+995
+KG,KGZ,Kyrgyzstan,+996
+UZ,UZB,Uzbekistan,+998
+US,USA,United States,+1201
+BS,BHS,Bahamas,+1242
+BB,BRB,Barbados,+1246
+AG,ATG,Antigua and Barbuda,+1268
+GD,GRD,Grenada,+1473
+LC,LCA,Saint Lucia,+1758
+DM,DMA,Dominica,+1767
+VC,VCT,Saint Vincent and the Grenadines,+1784
+DO,DOM,Dominican Republic,+1809
+TT,TTO,Trinidad and Tobago,+1868
+KN,KNA,Saint Kitts and Nevis,+1869
+JM,JAM,Jamaica,+1876
+VA,VAT,Vatican City,+3906698

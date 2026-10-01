@@ -4,67 +4,120 @@ from datetime import date
 from pathlib import Path
 import pandas as pd
 from process_timer import ProcessTimer
+import sys
 logger = logging.getLogger(__name__)
 def run():
     timer = ProcessTimer(f"Dimensions", logger)
     create_dim_date()
     timer.step("DIM_Dates")
-    create_dim_state()
+    create_base_state()
     timer.step("DIM_States")
     timer.total()
 
-def create_dim_state():
-    """Load the state lookup used by dim_tables.sql; retain existing codes."""
-    file = Path(__file__).resolve().parent / "state_codename.csv"
+def create_base_country():    
+    file = Path(__file__).resolve().parent / "files/code_country.csv"
+    if not file.is_file():
+        raise FileNotFoundError(f"Country lookup CSV not found: {file}")
+
+    df = pd.read_csv(file, dtype="string", keep_default_na=False)
+    required = {"alpha2","alpha3","country","callcode"}
+    if not required.issubset(df.columns):
+        logger.error(f"Columns alpha2, alpha3 , country and callcode not found")
+        sys.exit(0)
+    df["alpha2"] = df["alpha2"].str.strip().str.upper()
+    df["alpha3"] = df["alpha3"].str.strip().str.upper()
+    df["country"] = df["country"].str.strip()
+    df["callcode"] = df["callcode"].str.strip().str.upper()
+    if (df["alpha2"].eq("") | df["alpha3"].eq("") | df["country"].eq("")| df["callcode"].eq("") ).any():
+        logger.error(f"Columns should no be empty")
+        sys.exit(0)
+
+    sql = """
+    IF OBJECT_ID(N'raw.base_countrycodes', N'U') IS NULL
+    BEGIN
+        CREATE TABLE raw.base_countrycodes (
+            alpha2 nvarchar(2) NOT NULL PRIMARY KEY,
+            alpha3 nvarchar(3) NOT NULL,
+            country nvarchar(100) NOT NULL,
+            callcode nvarchar(5) NOT NULL
+        );
+    END;
+    """
+    if not fnc.ExecQ(sql):
+        logger.error(f"Failed to create base_countrycodes")
+        sys.exit(0)
+
+    sql = """
+    IF NOT EXISTS (
+        SELECT 1 FROM raw.base_countrycodes WHERE alpha2 = :alpha2
+    )
+    BEGIN
+        INSERT INTO raw.base_countrycodes (alpha2, alpha3,country,callcode)
+        VALUES (:alpha2, :alpha3, :country,:callcode);
+    END;
+    """
+    for row in df.itertuples(index=False):
+        params = {"alpha2": row.alpha2, "alpha3": row.alpha3}
+        if not fnc.ExecQ(sql, params):
+            logger.error(f"Failed to load state code")
+            sys.exit(0)  
+    return True
+def create_base_state():    
+    file = Path(__file__).resolve().parent / "files/state_codename.csv"
     if not file.is_file():
         raise FileNotFoundError(f"State lookup CSV not found: {file}")
 
     df = pd.read_csv(file, dtype="string", keep_default_na=False)
     required = {"state_code", "state_name"}
     if not required.issubset(df.columns):
-        raise ValueError("State lookup CSV requires state_code and state_name columns")
+        logger.error(f"Columns state_code and state_name not found")
+        sys.exit(0)
     df["state_code"] = df["state_code"].str.strip().str.upper()
     df["state_name"] = df["state_name"].str.strip()
     if (df["state_code"].eq("") | df["state_name"].eq("")).any():
-        raise ValueError("State codes and names must not be empty")
+        logger.error(f"Columns state_code and state_name should no be empty")
+        sys.exit(0)
 
     sql = """
-    IF OBJECT_ID(N'dbo.base_statecodes', N'U') IS NULL
+    IF OBJECT_ID(N'raw.base_statecodes', N'U') IS NULL
     BEGIN
-        CREATE TABLE dbo.base_statecodes (
+        CREATE TABLE raw.base_statecodes (
             StateCode nvarchar(20) NOT NULL PRIMARY KEY,
             StateName nvarchar(100) NOT NULL
         );
     END;
     """
     if not fnc.ExecQ(sql):
-        raise RuntimeError("Failed to create dbo.base_statecodes")
+        logger.error(f"Failed to create base_statecodes")
+        sys.exit(0)
 
     sql = """
     IF NOT EXISTS (
-        SELECT 1 FROM dbo.base_statecodes WHERE StateCode = :state_code
+        SELECT 1 FROM raw.base_statecodes WHERE StateCode = :state_code
     )
     BEGIN
-        INSERT INTO dbo.base_statecodes (StateCode, StateName)
+        INSERT INTO raw.base_statecodes (StateCode, StateName)
         VALUES (:state_code, :state_name);
     END;
     """
     for row in df.itertuples(index=False):
         params = {"state_code": row.state_code, "state_name": row.state_name}
         if not fnc.ExecQ(sql, params):
-            raise RuntimeError(f"Failed to load state code {row.state_code}")    
+            logger.error(f"Failed to load state code")
+            sys.exit(0)  
     return True
 
 def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):    
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
 
-    if start > end:
-        raise ValueError("start_date must be on or before end_date")
+    if start > end:        
+        logger.error(f"Start_date must be on or before end_date")
+        sys.exit(0)  
     sql = f"""
-    IF OBJECT_ID(N'dbo.Dim_Date', N'U') IS NULL
+    IF OBJECT_ID(N'raw.Dim_Date', N'U') IS NULL
     BEGIN
-        CREATE TABLE dbo.Dim_Date (
+        CREATE TABLE raw.Dim_Date (
             DateKey int NOT NULL PRIMARY KEY,
             FullDate date NOT NULL UNIQUE,
             CalendarYear smallint NOT NULL,
@@ -81,10 +134,10 @@ def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):
         );
     END;
 
-    IF COL_LENGTH(N'dbo.Dim_Date', N'YearQuarter') IS NULL
+    IF COL_LENGTH(N'raw.Dim_Date', N'YearQuarter') IS NULL
     BEGIN
         EXEC(N'
-            ALTER TABLE dbo.Dim_Date
+            ALTER TABLE raw.Dim_Date
             ADD YearQuarter AS (
                 CONVERT(varchar(4), CalendarYear) + ''-Q'' +
                 CONVERT(varchar(1), CalendarQuarter)
@@ -93,17 +146,17 @@ def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):
     END;
 
     -- Seven-day blocks within each month: days 1-7 = week 1.
-    IF COL_LENGTH(N'dbo.Dim_Date', N'WeekOfMonth') IS NULL
+    IF COL_LENGTH(N'raw.Dim_Date', N'WeekOfMonth') IS NULL
     BEGIN
-        EXEC(N'ALTER TABLE dbo.Dim_Date ADD WeekOfMonth AS (
+        EXEC(N'ALTER TABLE raw.Dim_Date ADD WeekOfMonth AS (
             (DAY(FullDate) - 1) / 7 + 1
         ) PERSISTED;');
     END;
 
     -- ISO weeks start Monday; week 1 contains January 4.
-    IF COL_LENGTH(N'dbo.Dim_Date', N'WeekOfYear') IS NULL
+    IF COL_LENGTH(N'raw.Dim_Date', N'WeekOfYear') IS NULL
     BEGIN
-        EXEC(N'ALTER TABLE dbo.Dim_Date ADD WeekOfYear AS (
+        EXEC(N'ALTER TABLE raw.Dim_Date ADD WeekOfYear AS (
             DATEPART(iso_week, FullDate)
         ) PERSISTED;');
     END;
@@ -144,7 +197,7 @@ def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):
             ) + 1 AS WeekdayNumber
         FROM Dates
     )
-    INSERT INTO dbo.Dim_Date (
+    INSERT INTO raw.Dim_Date (
         DateKey,
         FullDate,
         CalendarYear,
@@ -187,14 +240,15 @@ def create_dim_date(start_date="2005-01-01", end_date="2030-12-31"):
     FROM Calendar AS c
     WHERE NOT EXISTS (
         SELECT 1
-        FROM dbo.Dim_Date AS d
+        FROM raw.Dim_Date AS d
         WHERE d.FullDate = c.FullDate
     )
     OPTION (MAXRECURSION 0);
     """
 
-    if not fnc.ExecQ(sql):
-        raise RuntimeError("Failed to create/populate dbo.Dim_Date")
+    if not fnc.ExecQ(sql):        
+        logger.error(f"Failed to create/populate raw.Dim_Date")
+        sys.exit(0)  
 
     logger.info("Dim_Date populated from %s to %s", start, end)
     

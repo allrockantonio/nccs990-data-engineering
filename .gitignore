@@ -26,3 +26,4 @@ raw_files/
 # Large/local data
 oldversion/
 parquets/
+irs990_dbt/

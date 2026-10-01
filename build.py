@@ -89,9 +89,63 @@ def download_csv():
 def create_data_dictionary():
     df_tbl_list=fnc.GetDF("SELECT TableName,recordid FROM [dbo].[NCCS_Tables]  where include=1 order by recordid asc")
     for index, row in df_tbl_list.iterrows():
-            tblname=row['TableName']
+            tblname=row['TableName']            
             tblid=row['recordid']
-            timer = ProcessTimer(f"{tblname} building dictionary", logger)
+            sql = f"select count(1) cnt from [dbo].[NCCS_Tables_Columns] where tableid='{tblid}'";
+            dfcols=fnc.GetDF(sql)
+            countid= dfcols['cnt'].iloc[0]
+            if int(countid) == 0:
+                sql = f"""
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'EIN2','TAG_EIN2','bigint','Document Tag',null,null,1
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'OBJECTID','TAG_OBJECTID','string','Document Tag',null,null,2
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'ORG_EIN','TAG_ORG_EIN','bigint','Document Tag',null,null,3
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'ORG_NAME_L1','TAG_ORG_NAME_L1','string','Document Tag',null,null,4
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'ORG_NAME_L2','TAG_ORG_NAME_L2','string','Document Tag',null,null,5
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_AMENDED_X','TAG_RETURN_AMENDED_X','string','Document Tag',null,null,6
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_GROUP_X','TAG_RETURN_GROUP_X','string','Document Tag',null,null,7
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_PARTIAL_X','TAG_RETURN_PARTIAL_X','string','Document Tag',null,null,8
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_TAXPER_DAYS','TAG_RETURN_TAXPER_DAYS','bigint','Document Tag',null,null,9
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_TIME_STAMP','TAG_RETURN_TIME_STAMP','datetime64','Document Tag',null,null,10
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'RETURN_TYPE','TAG_RETURN_TYPE','string','Document Tag',null,null,11
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'TAX_PERIOD_BEGIN_DATE','TAG_TAX_PERIOD_BEGIN_DATE','datetime64','Document Tag',null,null,12
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'TAX_PERIOD_END_DATE','TAG_TAX_PERIOD_END_DATE','datetime64','Document Tag',null,null,13
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'TAX_YEAR','TAG_TAX_YEAR','int','Document Tag',null,null,14
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'URL','URL','string','Document Tag',null,null,15
+
+                    insert into NCCS_Tables_Columns([TableID], [OrgColName], [NewColName], [ColType], [Description], [LocationCode], [Scope], [OrderID])
+                    select {tblid},'VERSION','TAG_VERSION','string','Document Tag',null,null,16
+                """
+                fnc.ExecQ(sql)
+            
             res = requests.get(catalog_dic,timeout=160)  
             soup = BeautifulSoup(res.text,"html.parser")  
             tablediv = soup.find("div",id="table-name-"+tblname.lower())
@@ -132,6 +186,7 @@ def create_data_dictionary():
                 (select newcolname from [dbo].[NCCS_Tables_Columns] where newcolname is not NULL and tableid = {fileid}) and newcolname is null
                 """
             fnc.ExecQ(sql)
+            timer = ProcessTimer(f"Dictionary | {tblname} ", logger)            
     timer.total()
 
 
@@ -140,7 +195,7 @@ def create_data_dictionary():
 def load_table_list():  
     res = requests.get(catalog_url,timeout=160)  
     soup = BeautifulSoup(res.text,"html.parser")   
-    timer = ProcessTimer(f"Extractig catalog", logger)  
+    timer = ProcessTimer(f"Catalog", logger)  
     for heading in soup.find_all("h3"):
         table_name = heading.get_text(strip=True)                            
         if not re.match(r"^(F9|SA|SB|SC|SD|SE|SF|SG|SH|SI|SJ|SK|SL|SM|SN|SO|SR)-",table_name):
@@ -169,7 +224,7 @@ def load_table_list():
                             select @fileid,{row_year},{row_count},null, '{url}','{filename}'
                         end
                     """  
-                    timer.step(f"{table_name} | {filename}")               
+                    timer.step(f"Catalog | {table_name} | {filename}")               
                     if not fnc.ExecQ(sql):
                         raise RuntimeError(f"Failed to save catalog record for {table_name}")                                                                
     timer.total()
